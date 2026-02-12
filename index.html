@@ -3,57 +3,38 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Denys Lite Call Pro</title>
+    <title>Denys Lite Call + Chat</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; color: white; }
+        body { margin: 0; padding: 0; background: #000; font-family: sans-serif; overflow: hidden; color: white; }
         
-        /* Видео собеседника на весь экран */
-        #remote-video {
-            position: absolute; top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            object-fit: cover; background: #1a1a1a;
-        }
+        #remote-video { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; }
+        #local-video { position: absolute; top: 20px; right: 20px; width: 100px; height: 140px; object-fit: cover; border-radius: 15px; border: 2px solid rgba(255,255,255,0.4); z-index: 10; }
 
-        /* Твое видео — маленькое в углу */
-        #local-video {
-            position: absolute; top: 20px; right: 20px;
-            width: 100px; height: 140px;
-            object-fit: cover; border-radius: 15px;
-            border: 2px solid rgba(255,255,255,0.4);
-            z-index: 10; transform: scaleX(-1); /* Зеркально */
-        }
+        .ui-overlay { position: absolute; bottom: 40px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; z-index: 20; gap: 20px; }
+        .controls-row { display: flex; gap: 10px; }
 
-        /* Интерфейс управления */
-        .ui-overlay {
-            position: absolute; bottom: 40px; left: 0; width: 100%;
-            display: flex; flex-direction: column; align-items: center;
-            z-index: 20; gap: 20px;
-        }
+        .btn { width: 55px; height: 55px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; transition: 0.2s; }
+        .btn-call { background: #28a745; color: white; width: auto; border-radius: 30px; padding: 0 30px; font-size: 18px; }
+        .btn-hangup { background: #eb4034; }
+        .btn-action { background: rgba(255,255,255,0.2); color: white; backdrop-filter: blur(10px); }
 
-        .controls-row { display: flex; gap: 15px; }
-
-        .btn {
-            width: 65px; height: 65px; border-radius: 50%;
-            border: none; cursor: pointer; display: flex;
-            align-items: center; justify-content: center; font-size: 26px;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        /* Стили чата */
+        #chat-window {
+            position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
+            width: 90%; max-width: 400px; height: 250px;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(15px);
+            border-radius: 20px; display: none; flex-direction: column;
+            border: 1px solid rgba(255,255,255,0.2); z-index: 30;
         }
+        #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
+        .msg { background: rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 12px; max-width: 80%; width: fit-content; font-size: 14px; }
+        .msg.me { align-self: flex-end; background: #28a745; }
         
-        .btn:active { transform: scale(0.9); }
-
-        .btn-call { background: #28a745; color: white; width: auto; border-radius: 35px; padding: 0 40px; font-size: 18px; font-weight: bold; }
-        .btn-hangup { background: #eb4034; color: white; }
-        .btn-action { background: rgba(255,255,255,0.15); color: white; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.2); }
-
-        input {
-            background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.3);
-            color: white; padding: 18px; border-radius: 15px; text-align: center;
-            width: 80%; max-width: 320px; font-size: 18px; outline: none;
-            backdrop-filter: blur(10px);
-        }
-
-        #status { font-size: 14px; color: #3498db; margin-bottom: 5px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; }
+        #chat-input-area { display: flex; padding: 10px; gap: 5px; }
+        #chat-input { flex: 1; background: rgba(255,255,255,0.1); border: none; border-radius: 10px; color: white; padding: 8px; outline: none; }
+        
+        input#room-input { background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 15px; border-radius: 15px; text-align: center; width: 80%; }
     </style>
 </head>
 <body>
@@ -61,17 +42,24 @@
     <video id="remote-video" autoplay playsinline></video>
     <video id="local-video" autoplay muted playsinline></video>
 
+    <div id="chat-window">
+        <div id="messages"></div>
+        <div id="chat-input-area">
+            <input type="text" id="chat-input" placeholder="Сообщение...">
+            <button onclick="sendMessage()" style="background: #28a745; border: none; color: white; border-radius: 10px; padding: 5px 15px;">></button>
+        </div>
+    </div>
+
     <div class="ui-overlay" id="ui-setup">
-        <div id="status">Система готова</div>
         <input type="text" id="room-input" placeholder="Имя комнаты">
-        <button class="btn btn-call" onclick="joinRoom()">СОЗДАТЬ / ВОЙТИ</button>
+        <button class="btn btn-call" onclick="joinRoom()">НАЧАТЬ</button>
     </div>
 
     <div class="ui-overlay" id="ui-active" style="display: none;">
         <div class="controls-row">
-            <button class="btn btn-action" onclick="toggleAudio()" id="mute-btn">🎤</button>
+            <button class="btn btn-action" onclick="toggleChat()">💬</button>
             <button class="btn btn-action" onclick="switchCamera()">🔄</button>
-            <button class="btn btn-action" onclick="shareLink()">🔗</button>
+            <button class="btn btn-action" onclick="toggleAudio()" id="mute-btn">🎤</button>
             <button class="btn btn-hangup" onclick="location.reload()">📞</button>
         </div>
     </div>
@@ -79,98 +67,80 @@
     <script>
         const remoteVideo = document.getElementById('remote-video');
         const localVideo = document.getElementById('local-video');
-        const statusDiv = document.getElementById('status');
-        let localStream;
-        let peer;
-        let currentFacingMode = 'user'; // 'user' или 'environment'
+        const messagesDiv = document.getElementById('messages');
+        const chatWindow = document.getElementById('chat-window');
+        const chatInput = document.getElementById('chat-input');
+        
+        let localStream, peer, dataConn;
+        let currentFacingMode = 'user';
 
-        // 1. Инициализация камеры (фронталка по умолчанию)
         async function initCamera(mode) {
-            try {
-                if (localStream) {
-                    localStream.getTracks().forEach(track => track.stop());
-                }
-                localStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: mode }, 
-                    audio: true 
-                });
-                localVideo.srcObject = localStream;
-                
-                // Эффект зеркала только для фронталки
-                localVideo.style.transform = (mode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
-                
-                return true;
-            } catch (err) {
-                statusDiv.innerText = "Ошибка камеры: " + err.message;
-                return false;
-            }
+            if (localStream) localStream.getTracks().forEach(t => t.stop());
+            localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode }, audio: true });
+            localVideo.srcObject = localStream;
+            localVideo.style.transform = (mode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
         }
 
-        // Запускаем при загрузке
-        initCamera(currentFacingMode).then(ok => {
-            if (ok) checkUrlParams();
-        });
+        initCamera(currentFacingMode);
 
-        // 2. Логика подключения
         function joinRoom() {
             const room = document.getElementById('room-input').value;
-            if (!room) return alert("Введите название комнаты!");
-
+            if (!room) return;
             document.getElementById('ui-setup').style.display = 'none';
             document.getElementById('ui-active').style.display = 'flex';
 
             const fullId = 'den-room-' + room;
             peer = new Peer();
 
-            peer.on('open', (myId) => {
-                // Пытаемся позвонить (если мы вторые)
+            peer.on('open', () => {
+                // Подключение видео
                 const call = peer.call(fullId, localStream);
-                call.on('stream', stream => { remoteVideo.srcObject = stream; });
+                call.on('stream', s => remoteVideo.srcObject = s);
+                
+                // Подключение данных (чата)
+                dataConn = peer.connect(fullId);
+                setupChat(dataConn);
 
-                // Ждем звонка (если мы первые)
                 const hostPeer = new Peer(fullId);
-                hostPeer.on('call', (incomingCall) => {
-                    incomingCall.answer(localStream);
-                    incomingCall.on('stream', stream => { remoteVideo.srcObject = stream; });
-                });
+                hostPeer.on('call', c => { c.answer(localStream); c.on('stream', s => remoteVideo.srcObject = s); });
+                hostPeer.on('connection', conn => { dataConn = conn; setupChat(conn); });
             });
-
-            peer.on('error', err => console.error("PeerJS Error:", err));
         }
 
-        // 3. Авто-вход
-        function checkUrlParams() {
-            const params = new URLSearchParams(window.location.search);
-            const roomName = params.get('room');
-            if (roomName) {
-                document.getElementById('room-input').value = roomName;
-                setTimeout(joinRoom, 800);
+        function setupChat(conn) {
+            conn.on('data', data => addMessage(data, 'other'));
+        }
+
+        function sendMessage() {
+            const text = chatInput.value;
+            if (text && dataConn) {
+                dataConn.send(text);
+                addMessage(text, 'me');
+                chatInput.value = '';
             }
         }
 
-        // 4. Доп. функции (Переключатель камер, Ссылка, Микрофон)
+        function addMessage(text, side) {
+            const m = document.createElement('div');
+            m.className = 'msg ' + side;
+            m.innerText = text;
+            messagesDiv.appendChild(m);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function toggleChat() {
+            chatWindow.style.display = (chatWindow.style.display === 'flex') ? 'none' : 'flex';
+        }
+
+        // Вспомогательные функции из Day 2
         async function switchCamera() {
             currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
-            const ok = await initCamera(currentFacingMode);
-            if (ok && peer) {
-                // В реальном времени заменить поток сложнее, 
-                // поэтому для стабильности лучше просто переподключиться.
-                alert("Камера переключена! Для обновления у собеседника может потребоваться перезаход.");
-            }
+            await initCamera(currentFacingMode);
         }
-
-        function shareLink() {
-            const room = document.getElementById('room-input').value;
-            const url = window.location.origin + window.location.pathname + "?room=" + room;
-            navigator.clipboard.writeText(url).then(() => {
-                alert("Ссылка скопирована! Отправь её другу.");
-            });
-        }
-
         function toggleAudio() {
-            const audioTrack = localStream.getAudioTracks()[0];
-            audioTrack.enabled = !audioTrack.enabled;
-            document.getElementById('mute-btn').innerText = audioTrack.enabled ? "🎤" : "🔇";
+            const t = localStream.getAudioTracks()[0];
+            t.enabled = !t.enabled;
+            document.getElementById('mute-btn').innerText = t.enabled ? "🎤" : "🔇";
         }
     </script>
 </body>
