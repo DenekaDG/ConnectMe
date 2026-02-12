@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Denys Lite Call + Chat</title>
+    <title>Denys Lite Call Ultimate</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background: #000; font-family: sans-serif; overflow: hidden; color: white; }
@@ -48,6 +48,7 @@
         <div class="controls-row">
             <button class="btn btn-action" onclick="toggleChat()">💬</button>
             <button class="btn btn-action" onclick="switchCamera()">🔄</button>
+            <button class="btn btn-action" onclick="shareLink()">🔗</button>
             <button class="btn btn-action" onclick="toggleAudio()" id="mute-btn">🎤</button>
             <button class="btn btn-hangup" onclick="location.reload()">📞</button>
         </div>
@@ -89,14 +90,12 @@
             peer = new Peer();
 
             peer.on('open', () => {
-                // Пытаемся позвонить и подключить чат одновременно
                 const call = peer.call(fullId, localStream);
                 call.on('stream', s => { remoteVideo.srcObject = s; });
 
                 const conn = peer.connect(fullId);
                 conn.on('open', () => { dataConn = conn; setupChat(conn); });
 
-                // Слушаем входящие
                 const hostPeer = new Peer(fullId);
                 hostPeer.on('call', c => {
                     c.answer(localStream);
@@ -106,6 +105,14 @@
                     dataConn = c;
                     setupChat(c);
                 });
+            });
+        }
+
+        function shareLink() {
+            const room = document.getElementById('room-input').value;
+            const url = window.location.origin + window.location.pathname + "?room=" + room;
+            navigator.clipboard.writeText(url).then(() => {
+                alert("Ссылка на комнату скопирована!");
             });
         }
 
@@ -136,8 +143,6 @@
         async function switchCamera() {
             currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
             await initCamera(currentFacingMode);
-            // Чтобы камера обновилась у собеседника, в этом простом P2P лучше перезайти,
-            // но звук и чат останутся.
         }
 
         function toggleAudio() {
