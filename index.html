@@ -7,34 +7,21 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background: #000; font-family: sans-serif; overflow: hidden; color: white; }
-        
-        #remote-video { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; }
-        #local-video { position: absolute; top: 20px; right: 20px; width: 100px; height: 140px; object-fit: cover; border-radius: 15px; border: 2px solid rgba(255,255,255,0.4); z-index: 10; }
-
+        #remote-video { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; background: #1a1a1a; }
+        #local-video { position: absolute; top: 20px; right: 20px; width: 100px; height: 140px; object-fit: cover; border-radius: 15px; border: 2px solid rgba(255,255,255,0.4); z-index: 10; transform: scaleX(-1); }
         .ui-overlay { position: absolute; bottom: 40px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; z-index: 20; gap: 20px; }
         .controls-row { display: flex; gap: 10px; }
-
         .btn { width: 55px; height: 55px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 22px; transition: 0.2s; }
-        .btn-call { background: #28a745; color: white; width: auto; border-radius: 30px; padding: 0 30px; font-size: 18px; }
-        .btn-hangup { background: #eb4034; }
-        .btn-action { background: rgba(255,255,255,0.2); color: white; backdrop-filter: blur(10px); }
-
-        /* Стили чата */
-        #chat-window {
-            position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%);
-            width: 90%; max-width: 400px; height: 250px;
-            background: rgba(0,0,0,0.6); backdrop-filter: blur(15px);
-            border-radius: 20px; display: none; flex-direction: column;
-            border: 1px solid rgba(255,255,255,0.2); z-index: 30;
-        }
+        .btn-call { background: #28a745; color: white; width: auto; border-radius: 30px; padding: 0 30px; font-size: 18px; font-weight: bold; }
+        .btn-hangup { background: #eb4034; color: white; }
+        .btn-action { background: rgba(255,255,255,0.2); color: white; backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+        #chat-window { position: absolute; bottom: 120px; left: 50%; transform: translateX(-50%); width: 90%; max-width: 400px; height: 250px; background: rgba(0,0,0,0.7); backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border-radius: 20px; display: none; flex-direction: column; border: 1px solid rgba(255,255,255,0.2); z-index: 30; }
         #messages { flex: 1; overflow-y: auto; padding: 15px; display: flex; flex-direction: column; gap: 8px; }
-        .msg { background: rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 12px; max-width: 80%; width: fit-content; font-size: 14px; }
+        .msg { background: rgba(255,255,255,0.1); padding: 8px 12px; border-radius: 12px; max-width: 80%; width: fit-content; font-size: 14px; color: white; }
         .msg.me { align-self: flex-end; background: #28a745; }
-        
         #chat-input-area { display: flex; padding: 10px; gap: 5px; }
-        #chat-input { flex: 1; background: rgba(255,255,255,0.1); border: none; border-radius: 10px; color: white; padding: 8px; outline: none; }
-        
-        input#room-input { background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 15px; border-radius: 15px; text-align: center; width: 80%; }
+        #chat-input { flex: 1; background: rgba(255,255,255,0.15); border: none; border-radius: 10px; color: white; padding: 10px; outline: none; }
+        input#room-input { background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.3); color: white; padding: 15px; border-radius: 15px; text-align: center; width: 80%; font-size: 16px; }
     </style>
 </head>
 <body>
@@ -44,15 +31,17 @@
 
     <div id="chat-window">
         <div id="messages"></div>
-        <div id="chat-input-area">
-            <input type="text" id="chat-input" placeholder="Сообщение...">
-            <button onclick="sendMessage()" style="background: #28a745; border: none; color: white; border-radius: 10px; padding: 5px 15px;">></button>
-        </div>
+        <form id="chat-form" onsubmit="sendMessage(event)" style="display:contents;">
+            <div id="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Сообщение..." autocomplete="off">
+                <button type="submit" style="background: #28a745; border: none; color: white; border-radius: 10px; padding: 5px 15px; cursor: pointer;">></button>
+            </div>
+        </form>
     </div>
 
     <div class="ui-overlay" id="ui-setup">
         <input type="text" id="room-input" placeholder="Имя комнаты">
-        <button class="btn btn-call" onclick="joinRoom()">НАЧАТЬ</button>
+        <button class="btn btn-call" onclick="joinRoom()">СОЗДАТЬ / ВОЙТИ</button>
     </div>
 
     <div class="ui-overlay" id="ui-active" style="display: none;">
@@ -70,18 +59,25 @@
         const messagesDiv = document.getElementById('messages');
         const chatWindow = document.getElementById('chat-window');
         const chatInput = document.getElementById('chat-input');
-        
         let localStream, peer, dataConn;
         let currentFacingMode = 'user';
 
         async function initCamera(mode) {
-            if (localStream) localStream.getTracks().forEach(t => t.stop());
-            localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode }, audio: true });
-            localVideo.srcObject = localStream;
-            localVideo.style.transform = (mode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
+            try {
+                if (localStream) localStream.getTracks().forEach(t => t.stop());
+                localStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode }, audio: true });
+                localVideo.srcObject = localStream;
+                localVideo.style.transform = (mode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
+            } catch (e) { alert("Ошибка камеры: " + e); }
         }
 
-        initCamera(currentFacingMode);
+        initCamera(currentFacingMode).then(() => {
+            const params = new URLSearchParams(window.location.search);
+            if (params.get('room')) {
+                document.getElementById('room-input').value = params.get('room');
+                setTimeout(joinRoom, 1000);
+            }
+        });
 
         function joinRoom() {
             const room = document.getElementById('room-input').value;
@@ -93,17 +89,23 @@
             peer = new Peer();
 
             peer.on('open', () => {
-                // Подключение видео
+                // Пытаемся позвонить и подключить чат одновременно
                 const call = peer.call(fullId, localStream);
-                call.on('stream', s => remoteVideo.srcObject = s);
-                
-                // Подключение данных (чата)
-                dataConn = peer.connect(fullId);
-                setupChat(dataConn);
+                call.on('stream', s => { remoteVideo.srcObject = s; });
 
+                const conn = peer.connect(fullId);
+                conn.on('open', () => { dataConn = conn; setupChat(conn); });
+
+                // Слушаем входящие
                 const hostPeer = new Peer(fullId);
-                hostPeer.on('call', c => { c.answer(localStream); c.on('stream', s => remoteVideo.srcObject = s); });
-                hostPeer.on('connection', conn => { dataConn = conn; setupChat(conn); });
+                hostPeer.on('call', c => {
+                    c.answer(localStream);
+                    c.on('stream', s => { remoteVideo.srcObject = s; });
+                });
+                hostPeer.on('connection', c => {
+                    dataConn = c;
+                    setupChat(c);
+                });
             });
         }
 
@@ -111,7 +113,8 @@
             conn.on('data', data => addMessage(data, 'other'));
         }
 
-        function sendMessage() {
+        function sendMessage(e) {
+            if (e) e.preventDefault();
             const text = chatInput.value;
             if (text && dataConn) {
                 dataConn.send(text);
@@ -128,15 +131,15 @@
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
-        function toggleChat() {
-            chatWindow.style.display = (chatWindow.style.display === 'flex') ? 'none' : 'flex';
-        }
-
-        // Вспомогательные функции из Day 2
+        function toggleChat() { chatWindow.style.display = (chatWindow.style.display === 'flex') ? 'none' : 'flex'; }
+        
         async function switchCamera() {
             currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
             await initCamera(currentFacingMode);
+            // Чтобы камера обновилась у собеседника, в этом простом P2P лучше перезайти,
+            // но звук и чат останутся.
         }
+
         function toggleAudio() {
             const t = localStream.getAudioTracks()[0];
             t.enabled = !t.enabled;
