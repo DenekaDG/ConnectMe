@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Denys Lite Call</title>
+    <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+    <style>
+        body { margin: 0; padding: 0; background: #000; font-family: sans-serif; overflow: hidden; color: white; }
+        
+        /* Видео собеседника на весь экран */
+        #remote-video {
+            position: absolute; top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            object-fit: cover; background: #222;
+        }
+
+        /* Твое видео — маленькое в углу */
+        #local-video {
+            position: absolute; top: 20px; right: 20px;
+            width: 120px; height: 160px;
+            object-fit: cover; border-radius: 12px;
+            border: 2px solid rgba(255,255,255,0.3);
+            z-index: 10; transform: scaleX(-1);
+        }
+
+        /* Панель управления */
+        .ui-overlay {
+            position: absolute; bottom: 30px; left: 0; width: 100%;
+            display: flex; flex-direction: column; align-items: center;
+            z-index: 20; gap: 20px;
+        }
+
+        .controls-row { display: flex; gap: 15px; }
+
+        .btn {
+            width: 60px; height: 60px; border-radius: 50%;
+            border: none; cursor: pointer; display: flex;
+            align-items: center; justify-content: center; font-size: 20px;
+        }
+
+        .btn-call { background: #28a745; color: white; width: auto; border-radius: 30px; padding: 0 30px; }
+        .btn-hangup { background: #dc3545; color: white; }
+        .btn-mute { background: rgba(255,255,255,0.2); color: white; backdrop-filter: blur(10px); }
+
+        input {
+            background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3);
+            color: white; padding: 12px; border-radius: 10px; text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video" autoplay muted playsinline></video>
+
+    <div class="ui-overlay" id="ui-setup">
+        <input type="text" id="room-input" placeholder="Имя комнаты">
+        <button class="btn btn-call" onclick="joinRoom()">Начать звонок</button>
+    </div>
+
+    <div class="ui-overlay" id="ui-active" style="display: none;">
+        <div class="controls-row">
+            <button class="btn btn-mute" onclick="toggleAudio()">🎤</button>
+            <button class="btn btn-hangup" onclick="location.reload()">📞</button>
+        </div>
+    </div>
+
+    <script>
+        const remoteVideo = document.getElementById('remote-video');
+        const localVideo = document.getElementById('local-video');
+        let localStream;
+        let peer;
+
+        // Запуск камеры
+        navigator.mediaDevices.getUserMedia({ video: true, audio: true }).then(stream => {
+            localStream = stream;
+            localVideo.srcObject = stream;
+        });
+
+        function joinRoom() {
+            const room = document.getElementById('room-input').value;
+            if (!room) return;
+
+            document.getElementById('ui-setup').style.display = 'none';
+            document.getElementById('ui-active').style.display = 'flex';
+
+            const fullId = 'den-room-' + room;
+            peer = new Peer();
+
+            peer.on('open', () => {
+                // Пытаемся позвонить в комнату
+                const call = peer.call(fullId, localStream);
+                handleCall(call);
+
+                // И одновременно слушаем, если кто-то позвонит нам по этому ID
+                const hostPeer = new Peer(fullId);
+                hostPeer.on('call', (incomingCall) => {
+                    incomingCall.answer(localStream);
+                    handleCall(incomingCall);
+                });
+            });
+        }
+
+        function handleCall(call) {
+            call.on('stream', stream => {
+                remoteVideo.srcObject = stream;
+            });
+        }
+
+        function toggleAudio() {
+            const enabled = localStream.getAudioTracks()[0].enabled;
+            localStream.getAudioTracks()[0].enabled = !enabled;
+            event.target.innerText = !enabled ? "🎤" : "🔇";
+        }
+    </script>
+</body>
+</html>
