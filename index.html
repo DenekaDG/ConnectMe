@@ -7,68 +7,51 @@
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
         body { margin: 0; padding: 0; background: #121212; font-family: -apple-system, sans-serif; color: white; overflow: hidden; }
-        
-        /* Видео */
         #remote-video { position: absolute; top: 0; left: 0; width: 100vw; height: 100vh; object-fit: cover; background: #000; }
         #local-video { position: absolute; top: 20px; right: 20px; width: 100px; height: 140px; object-fit: cover; border-radius: 15px; border: 2px solid #3498db; z-index: 10; transform: scaleX(-1); }
-
-        /* Главное меню */
-        #main-menu { position: absolute; inset: 0; background: #121212; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; }
+        #main-menu { position: absolute; inset: 0; background: #121212; z-index: 100; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px; text-align: center; }
         .contact-list { width: 100%; max-width: 350px; display: flex; flex-direction: column; gap: 15px; margin-top: 30px; }
-        .contact-card { background: #1e1e1e; padding: 20px; border-radius: 20px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #333; transition: 0.3s; }
-        .contact-card:active { transform: scale(0.95); background: #252525; }
-        .contact-info b { font-size: 18px; display: block; }
-        .contact-info span { font-size: 13px; color: #888; }
+        .contact-card { background: #1e1e1e; padding: 20px; border-radius: 20px; display: flex; justify-content: space-between; align-items: center; border: 1px solid #333; cursor: pointer; }
+        .contact-info b { font-size: 18px; display: block; text-align: left; }
+        .contact-info span { font-size: 13px; color: #888; display: block; text-align: left; }
         .call-btn-icon { background: #28a745; width: 45px; height: 45px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; }
-
-        /* Оверлей управления во время звонка */
         .ui-overlay { position: absolute; bottom: 40px; left: 0; width: 100%; display: flex; flex-direction: column; align-items: center; z-index: 20; gap: 20px; }
         .controls-row { display: flex; gap: 15px; }
-        .btn { width: 60px; height: 60px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+        .btn { width: 60px; height: 60px; border-radius: 50%; border: none; display: flex; align-items: center; justify-content: center; font-size: 24px; cursor: pointer; }
         .btn-hangup { background: #eb4034; color: white; }
         .btn-action { background: rgba(255,255,255,0.1); backdrop-filter: blur(10px); color: white; border: 1px solid rgba(255,255,255,0.2); }
-
-        h1 { margin: 0; font-size: 28px; font-weight: 800; }
-        .my-id-tag { background: #3498db; padding: 5px 15px; border-radius: 20px; font-size: 12px; margin-top: 10px; }
+        h1 { margin: 0; font-size: 28px; }
+        #status-bar { position: absolute; top: 30px; left: 20px; font-size: 12px; color: #3498db; z-index: 50; }
     </style>
 </head>
 <body>
 
+    <div id="status-bar"></div>
     <video id="remote-video" autoplay playsinline></video>
     <video id="local-video" autoplay muted playsinline></video>
 
     <div id="main-menu">
         <h1>Lite Skype</h1>
-        <div class="my-id-tag">Ваш профиль: <b>Денис</b></div>
+        <div style="background: #3498db; padding: 5px 15px; border-radius: 20px; font-size: 12px; margin-top: 10px;">Профиль: <b>Денис</b></div>
         
         <div class="contact-list">
-            <div class="contact-card" onclick="startCall('den-room-friend1')">
-                <div class="contact-info">
-                    <b>Henry</b>
-                    <span>Нажми, чтобы позвонить</span>
-                </div>
+            <div class="contact-card" onclick="startCall('den-room-henry', 'Henry')">
+                <div class="contact-info"><b>Henry</b><span>Нажми, чтобы позвонить</span></div>
                 <div class="call-btn-icon">📞</div>
             </div>
-
-            <div class="contact-card" onclick="startCall('den-room-friend2')">
-                <div class="contact-info">
-                    <b>Helen</b>
-                    <span>Нажми, чтобы позвонить</span>
-                </div>
+            <div class="contact-card" onclick="startCall('den-room-helen', 'Helen')">
+                <div class="contact-info"><b>Helen</b><span>Нажми, чтобы позвонить</span></div>
                 <div class="call-btn-icon">📞</div>
             </div>
-
-            <div class="contact-card" onclick="startCall('den-room-custom')">
-                <div class="contact-info">
-                    <b>Общая комната</b>
-                    <span>Для всех остальных</span>
-                </div>
+            <div class="contact-card" onclick="startCall('den-room-custom', 'Общая')">
+                <div class="contact-info"><b>Общая комната</b><span>Для всех</span></div>
                 <div class="call-btn-icon">👥</div>
             </div>
         </div>
     </div>
 
     <div class="ui-overlay" id="ui-active" style="display: none;">
+        <div id="call-label" style="margin-bottom: 10px; color: #3498db; font-weight: bold;"></div>
         <div class="controls-row">
             <button class="btn btn-action" onclick="switchCamera()">🔄</button>
             <button class="btn btn-action" onclick="copyCallLink()">🔗</button>
@@ -79,45 +62,65 @@
     <script>
         const remoteVideo = document.getElementById('remote-video');
         const localVideo = document.getElementById('local-video');
+        const statusBar = document.getElementById('status-bar');
         let localStream, peer, currentRoomId;
 
-        // Инициализация камеры
         async function initCamera() {
-            localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-            localVideo.srcObject = localStream;
+            try {
+                localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                localVideo.srcObject = localStream;
+            } catch (e) {
+                alert("Нет доступа к камере!");
+            }
         }
 
         initCamera();
 
-        // Проверка авто-входа по ссылке
         window.onload = () => {
             const params = new URLSearchParams(window.location.search);
-            if (params.get('room')) startCall(params.get('room'));
+            const room = params.get('room');
+            if (room) setTimeout(() => startCall(room, "Вход по ссылке..."), 1000);
         };
 
-        function startCall(roomId) {
+        function startCall(roomId, name) {
             currentRoomId = roomId;
             document.getElementById('main-menu').style.display = 'none';
             document.getElementById('ui-active').style.display = 'flex';
+            document.getElementById('call-label').innerText = "ЗВОНОК: " + name;
 
-            peer = new Peer();
-            peer.on('open', () => {
-                // Звоним
-                const call = peer.call(roomId, localStream);
-                call.on('stream', s => remoteVideo.srcObject = s);
+            // Создаем ОДИН peer объект с ID комнаты
+            // Если ID занят - значит мы вторые (гости)
+            // Если ID свободен - мы хосты
+            peer = new Peer(roomId);
 
-                // Слушаем входящий
-                const hostPeer = new Peer(roomId);
-                hostPeer.on('call', c => {
-                    c.answer(localStream);
-                    c.on('stream', s => remoteVideo.srcObject = s);
-                });
+            peer.on('open', (id) => {
+                statusBar.innerText = "Ожидание собеседника...";
+            });
+
+            // Если мы ХОСТ и нам звонят
+            peer.on('call', (call) => {
+                statusBar.innerText = "Соединение...";
+                call.answer(localStream);
+                call.on('stream', s => { remoteVideo.srcObject = s; });
+            });
+
+            // Если комната уже занята (значит там уже сидит ХОСТ)
+            peer.on('error', (err) => {
+                if (err.type === 'unavailable-id') {
+                    // Переподключаемся как гость со случайным ID
+                    peer = new Peer();
+                    peer.on('open', () => {
+                        statusBar.innerText = "Подключение к " + name + "...";
+                        const call = peer.call(roomId, localStream);
+                        call.on('stream', s => { remoteVideo.srcObject = s; });
+                    });
+                }
             });
         }
 
         function copyCallLink() {
             const url = window.location.origin + window.location.pathname + "?room=" + currentRoomId;
-            navigator.clipboard.writeText(url).then(() => alert("Ссылка скопирована! Отправь её другу в Telegram."));
+            navigator.clipboard.writeText(url).then(() => alert("Ссылка скопирована!"));
         }
 
         async function switchCamera() {
