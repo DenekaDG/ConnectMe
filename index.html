@@ -3,10 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Denys Lite Call</title>
+    <title>Denys Lite Call Pro</title>
     <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
     <style>
-        body { margin: 0; padding: 0; background: #000; font-family: sans-serif; overflow: hidden; color: white; }
+        body { margin: 0; padding: 0; background: #000; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; overflow: hidden; color: white; }
         
         /* Видео собеседника на весь экран */
         #remote-video {
@@ -19,12 +19,12 @@
         #local-video {
             position: absolute; top: 20px; right: 20px;
             width: 100px; height: 140px;
-            object-fit: cover; border-radius: 12px;
-            border: 2px solid rgba(255,255,255,0.3);
-            z-index: 10; transform: scaleX(-1); /* Зеркально для удобства */
+            object-fit: cover; border-radius: 15px;
+            border: 2px solid rgba(255,255,255,0.4);
+            z-index: 10; transform: scaleX(-1); /* Зеркально */
         }
 
-        /* Оверлей с кнопками и вводом */
+        /* Интерфейс управления */
         .ui-overlay {
             position: absolute; bottom: 40px; left: 0; width: 100%;
             display: flex; flex-direction: column; align-items: center;
@@ -34,23 +34,26 @@
         .controls-row { display: flex; gap: 15px; }
 
         .btn {
-            width: 60px; height: 60px; border-radius: 50%;
+            width: 65px; height: 65px; border-radius: 50%;
             border: none; cursor: pointer; display: flex;
-            align-items: center; justify-content: center; font-size: 24px;
-            transition: 0.3s;
+            align-items: center; justify-content: center; font-size: 26px;
+            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
         }
+        
+        .btn:active { transform: scale(0.9); }
 
-        .btn-call { background: #28a745; color: white; width: auto; border-radius: 30px; padding: 0 30px; font-size: 18px; }
-        .btn-hangup { background: #dc3545; color: white; }
-        .btn-action { background: rgba(255,255,255,0.2); color: white; backdrop-filter: blur(10px); }
+        .btn-call { background: #28a745; color: white; width: auto; border-radius: 35px; padding: 0 40px; font-size: 18px; font-weight: bold; }
+        .btn-hangup { background: #eb4034; color: white; }
+        .btn-action { background: rgba(255,255,255,0.15); color: white; backdrop-filter: blur(15px); -webkit-backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.2); }
 
         input {
-            background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.3);
-            color: white; padding: 15px; border-radius: 10px; text-align: center;
-            width: 70%; max-width: 300px; font-size: 16px; outline: none;
+            background: rgba(0,0,0,0.7); border: 1px solid rgba(255,255,255,0.3);
+            color: white; padding: 18px; border-radius: 15px; text-align: center;
+            width: 80%; max-width: 320px; font-size: 18px; outline: none;
+            backdrop-filter: blur(10px);
         }
 
-        #status { font-size: 14px; color: #aaa; margin-bottom: 5px; }
+        #status { font-size: 14px; color: #3498db; margin-bottom: 5px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; }
     </style>
 </head>
 <body>
@@ -59,14 +62,15 @@
     <video id="local-video" autoplay muted playsinline></video>
 
     <div class="ui-overlay" id="ui-setup">
-        <div id="status">Готов к работе</div>
-        <input type="text" id="room-input" placeholder="Введите имя комнаты">
-        <button class="btn btn-call" onclick="joinRoom()">Войти и начать</button>
+        <div id="status">Система готова</div>
+        <input type="text" id="room-input" placeholder="Имя комнаты">
+        <button class="btn btn-call" onclick="joinRoom()">СОЗДАТЬ / ВОЙТИ</button>
     </div>
 
     <div class="ui-overlay" id="ui-active" style="display: none;">
         <div class="controls-row">
             <button class="btn btn-action" onclick="toggleAudio()" id="mute-btn">🎤</button>
+            <button class="btn btn-action" onclick="switchCamera()">🔄</button>
             <button class="btn btn-action" onclick="shareLink()">🔗</button>
             <button class="btn btn-hangup" onclick="location.reload()">📞</button>
         </div>
@@ -78,19 +82,36 @@
         const statusDiv = document.getElementById('status');
         let localStream;
         let peer;
+        let currentFacingMode = 'user'; // 'user' или 'environment'
 
-        // 1. Инициализация камеры
-        navigator.mediaDevices.getUserMedia({ video: true, audio: true })
-            .then(stream => {
-                localStream = stream;
-                localVideo.srcObject = stream;
-                checkUrlParams(); // Проверяем ссылку после готовности камеры
-            })
-            .catch(err => {
+        // 1. Инициализация камеры (фронталка по умолчанию)
+        async function initCamera(mode) {
+            try {
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                }
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: mode }, 
+                    audio: true 
+                });
+                localVideo.srcObject = localStream;
+                
+                // Эффект зеркала только для фронталки
+                localVideo.style.transform = (mode === 'user') ? 'scaleX(-1)' : 'scaleX(1)';
+                
+                return true;
+            } catch (err) {
                 statusDiv.innerText = "Ошибка камеры: " + err.message;
-            });
+                return false;
+            }
+        }
 
-        // 2. Логика входа в комнату
+        // Запускаем при загрузке
+        initCamera(currentFacingMode).then(ok => {
+            if (ok) checkUrlParams();
+        });
+
+        // 2. Логика подключения
         function joinRoom() {
             const room = document.getElementById('room-input').value;
             if (!room) return alert("Введите название комнаты!");
@@ -102,41 +123,50 @@
             peer = new Peer();
 
             peer.on('open', (myId) => {
-                console.log("Мой ID: " + myId);
-                
-                // Пытаемся позвонить на ID комнаты (если там уже кто-то есть)
+                // Пытаемся позвонить (если мы вторые)
                 const call = peer.call(fullId, localStream);
                 call.on('stream', stream => { remoteVideo.srcObject = stream; });
 
-                // Сами становимся "слушателем" для этой комнаты
+                // Ждем звонка (если мы первые)
                 const hostPeer = new Peer(fullId);
                 hostPeer.on('call', (incomingCall) => {
                     incomingCall.answer(localStream);
                     incomingCall.on('stream', stream => { remoteVideo.srcObject = stream; });
                 });
             });
+
+            peer.on('error', err => console.error("PeerJS Error:", err));
         }
 
-        // 3. Авто-вход по ссылке ?room=название
+        // 3. Авто-вход
         function checkUrlParams() {
             const params = new URLSearchParams(window.location.search);
             const roomName = params.get('room');
             if (roomName) {
                 document.getElementById('room-input').value = roomName;
-                setTimeout(joinRoom, 500);
+                setTimeout(joinRoom, 800);
             }
         }
 
-        // 4. Копирование ссылки
+        // 4. Доп. функции (Переключатель камер, Ссылка, Микрофон)
+        async function switchCamera() {
+            currentFacingMode = (currentFacingMode === 'user') ? 'environment' : 'user';
+            const ok = await initCamera(currentFacingMode);
+            if (ok && peer) {
+                // В реальном времени заменить поток сложнее, 
+                // поэтому для стабильности лучше просто переподключиться.
+                alert("Камера переключена! Для обновления у собеседника может потребоваться перезаход.");
+            }
+        }
+
         function shareLink() {
             const room = document.getElementById('room-input').value;
             const url = window.location.origin + window.location.pathname + "?room=" + room;
             navigator.clipboard.writeText(url).then(() => {
-                alert("Ссылка скопирована! Отправь её собеседнику.");
+                alert("Ссылка скопирована! Отправь её другу.");
             });
         }
 
-        // 5. Выключение микрофона
         function toggleAudio() {
             const audioTrack = localStream.getAudioTracks()[0];
             audioTrack.enabled = !audioTrack.enabled;
